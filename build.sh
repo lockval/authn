@@ -3,8 +3,11 @@
 build(){
     echo "build $*"
 
-    GOOS=${2} GOARCH=${1} go build -trimpath -o ../lockv/3rd/dist/${1}/${2}/login${3}   ./internal/login
+    GOOS=${2} GOARCH=${1} go build -trimpath -o ../lockv/3rd/dist/${1}/${2}/login${3} ./internal/login
     GOOS=${2} GOARCH=${1} go build -trimpath -o ../lockv/3rd/dist/${1}/${2}/guest${3} ./internal/guest
+
+    chmod +x ../lockv/3rd/dist/${1}/${2}/login${3}
+    chmod +x ../lockv/3rd/dist/${1}/${2}/guest${3}
 
 }
 
