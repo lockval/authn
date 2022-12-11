@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
-	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -15,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/lockval/authn/common"
 	"github.com/lockval/authn/db"
 )
@@ -32,8 +31,8 @@ var (
 )
 
 const (
-	// StatusLoginAuthError StatusLoginAuthError
-	StatusLoginAuthError = 597
+// StatusLoginAuthError StatusLoginAuthError
+// StatusLoginAuthError = 597
 )
 
 func main() {
@@ -122,20 +121,12 @@ func loginbyhttp(ctx context.Context, LorP common.LoginByLoginOrPlatform) (dbtok
 	return
 }
 
-func auth(w http.ResponseWriter, r *http.Request) {
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(StatusLoginAuthError)
-		_, _ = w.Write([]byte(err.Error()))
-		return
-	}
+func auth(c *gin.Context) {
 
 	var LorP common.LoginByLoginOrPlatform
-	err = json.Unmarshal(b, &LorP)
+	err := c.BindJSON(&LorP)
 	if err != nil {
-		w.WriteHeader(StatusLoginAuthError)
-		_, _ = w.Write([]byte(err.Error()))
+		_ = c.Error(err)
 		return
 	}
 
@@ -151,7 +142,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println("==token==login==", dbtoken)
 	} else {
 		var dbtokens []string
-		dbtokens, uid, info, err = loginbyhttp(r.Context(), LorP)
+		dbtokens, uid, info, err = loginbyhttp(c.Request.Context(), LorP)
 		loginRequ.DBToken = dbtokens[len(dbtokens)-1]
 		for _, dbtoken := range dbtokens {
 			keep := common.GetHash(dbtoken + *common.VSecretkey)
@@ -160,8 +151,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println("==other==login==", dbtokens)
 	}
 	if err != nil {
-		w.WriteHeader(StatusLoginAuthError)
-		_, _ = w.Write([]byte(err.Error()))
+		_ = c.Error(err)
 		return
 	}
 
@@ -171,42 +161,44 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	token := common.GetHash(timestampMicro + loginRequ.UID + loginRequ.DBToken + loginRequ.Info + *common.VSecretkey)
 	loginRequ.Token = token
 
-	b, err = json.Marshal(&loginRequ)
-	if err != nil {
-		w.WriteHeader(StatusLoginAuthError)
-		_, _ = w.Write([]byte(err.Error()))
-		return
-	}
-
-	_, _ = w.Write(b)
+	c.JSON(200, loginRequ)
 }
 
 func serveGate() {
-	mux := http.NewServeMux()
+	gin.SetMode(gin.ReleaseMode)
 
-	mux.HandleFunc("/auth", auth)
+	r := gin.New()
 
-	lis, err := net.Listen("tcp", *common.ServiceAddr)
-	if err != nil {
-		panic(err)
-	}
+	// config := cors.DefaultConfig()
+	// config.AllowHeaders = []string{"Authorization", "Content-Type", "User-Agent", "Accept"} // CONNECT,OPTIONS,TRACE
+	// config.AllowMethods = []string{"GET", "HEAD", "POST", "PUT", "DELETE"}
+	// config.AllowCredentials = true
+	// config.AllowOriginFunc = func(origin string) bool {
+	// 	return true
+	// }
+	// r.Use(cors.New(config))
+
+	r.POST("/auth", auth)
 
 	httpservice = &http.Server{
-		Handler:     mux,
+		Handler:     r,
 		ReadTimeout: 10 * time.Second,
 		// WriteTimeout:   10 * time.Second,
 		// MaxHeaderBytes: 1 << 20,
 	}
 
+	lis, err := net.Listen("tcp", *common.ServiceAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	wg.Add(1)
 	go func() {
-		err := httpservice.Serve(lis)
+		err := httpservice.Serve(lis) // listen and serve on 0.0.0.0:8080
 		if err != nil {
-			if !errors.Is(err, http.ErrServerClosed) {
-				panic(err)
-			}
+			log.Fatal(err)
 		}
-
 		wg.Done()
 	}()
+
 }

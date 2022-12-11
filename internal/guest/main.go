@@ -87,7 +87,14 @@ func main() {
 
 	r := gin.New()
 
-	// r.Use(cors.Default())
+	// config := cors.DefaultConfig()
+	// config.AllowHeaders = []string{"Authorization", "Content-Type", "User-Agent", "Accept"} // CONNECT,OPTIONS,TRACE
+	// config.AllowMethods = []string{"GET", "HEAD", "POST", "PUT", "DELETE"}
+	// config.AllowCredentials = true
+	// config.AllowOriginFunc = func(origin string) bool {
+	// 	return true
+	// }
+	// r.Use(cors.New(config))
 
 	r.POST("/auth", auth)
 
